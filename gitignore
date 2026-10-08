@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Streamlit: KHÔNG đưa secrets lên GitHub
+.streamlit/secrets.toml
+
+# Nhận xét bổ sung được tạo khi chạy local
+nhan_xet_bo_sung.json
+
+# File dữ liệu tải về để chạy thử
+*.xlsx
+*.xls
+*.csv
