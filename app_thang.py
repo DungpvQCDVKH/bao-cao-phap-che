@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-BÁO CÁO CHẤT LƯỢNG CÔNG VIỆC PHÁP CHẾ - PHÒNG KIỂM SOÁT NỘI BỘ
-Chạy:  streamlit run app.py
+BÁO CÁO THÁNG - CHẤT LƯỢNG CÔNG VIỆC PHÁP CHẾ - PHÒNG KIỂM SOÁT NỘI BỘ
+Chạy:  streamlit run app_thang.py
 
 - Chỉ ĐỌC dữ liệu nguồn (Google Drive), không ghi/sửa gì vào file gốc.
 - 1 trang duy nhất, bộ lọc bên trái.
-- Nhận xét bổ sung được lưu ở file nhan_xet_bo_sung.json cạnh app.py (không đụng tới dữ liệu nguồn).
+- Nhận xét bổ sung được lưu ở file nhan_xet_thang.json cạnh app_thang.py (không đụng tới dữ liệu nguồn).
 """
 import base64
 import html
@@ -49,13 +49,8 @@ try:  # giờ Việt Nam (server Streamlit Cloud chạy giờ UTC)
 except Exception:
     TODAY = date.today()
 LOGO_URL = (
-    "https://scontent.fhan12-1.fna.fbcdn.net/v/t39.30808-6/584260385_837902692321611_5716056316"
-    "288511031_n.jpg?stp=dst-jpg_tt6&cstp=mx2048x2048&ctp=s2048x2048&_nc_cat=101&_nc_map=urlgen"
-    "_bucketless&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=g8KidzZ6L5QQ7kNvwGNfgL_&_nc_oc=AdrYQ6ZR6jg9BxjW"
-    "Klg8E2vu_5NfNZtnsopCByiqkhGV9pWHV4IQ23RzS0P7nOedJbw&_nc_zt=23&_nc_ht=scontent.fhan12-1.fna"
-    "&_nc_gid=hjpRNR4cui61LBT0GMwqeg&_nc_ss=7b2a8&oh=00_AQNXYuUUwXpDVwVWQDuX_MDxWv4_JbucOQ6OrNY"
-    "rKVOZRA&oe=6ACD8ECB")
-NOTES_FILE = Path(__file__).with_name("nhan_xet_bo_sung.json")
+    "https://scontent.fhan12-1.fna.fbcdn.net/v/t39.30808-6/584260385_837902692321611_5716056316288511031_n.jpg?stp=dst-jpg_tt6&cstp=mx2048x2048&ctp=s2048x2048&_nc_cat=101&_nc_map=urlgen_bucketless&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=g8KidzZ6L5QQ7kNvwGNfgL_&_nc_oc=AdrYQ6ZR6jg9BxjWKlg8E2vu_5NfNZtnsopCByiqkhGV9pWHV4IQ23RzS0P7nOedJbw&_nc_zt=23&_nc_ht=scontent.fhan12-1.fna&_nc_gid=hjpRNR4cui61LBT0GMwqeg&_nc_ss=7b2a8&oh=00_AQNXYuUUwXpDVwVWQDuX_MDxWv4_JbucOQ6OrNYrKVOZRA&oe=6ACD8ECB")
+NOTES_FILE = Path(__file__).with_name("nhan_xet_thang.json")
 
 ALIASES = {
     "detail":   ["chi tiet yeu cau", "chi tiet", "noi dung yeu cau", "noi dung"],
@@ -91,7 +86,7 @@ UNIT_COLORS = [BLUE, NAVY, ORANGE, "#7B1FA2", "#E91E8C", "#8E6BBF", "#E0B400", "
 FONT = "Be Vietnam Pro, Segoe UI, Roboto, Arial, sans-serif"
 ROMAN = {1: "I", 2: "II", 3: "III", 4: "IV"}
 
-st.set_page_config(page_title="Báo cáo chất lượng công việc Pháp chế", page_icon="⚖️",
+st.set_page_config(page_title="Báo cáo tháng - Công việc Pháp chế", page_icon="⚖️",
                    layout="wide", initial_sidebar_state="expanded")
 
 CSS = """
@@ -291,53 +286,43 @@ def fetch_source():
     return None
 
 
-def _process_logo(raw: bytes) -> dict:
-    """Xử lý ảnh logo: cắt viền trong suốt, thu nhỏ, mã hóa base64; nhận biết logo sáng/nền đặc để không cần ô trắng."""
-    from PIL import Image
-    img = Image.open(io.BytesIO(raw)).convert("RGBA")
-    a = np.asarray(img)
-    has_alpha = a[..., 3].min() < 250
-    if has_alpha:
-        bbox = img.getchannel("A").point(lambda v: 255 if v > 20 else 0).getbbox()
-        if bbox:
-            img = img.crop(bbox)
-            a = np.asarray(img)
-    m = a[..., 3] > 128
-    lum = float((0.299 * a[..., 0] + 0.587 * a[..., 1] + 0.114 * a[..., 2])[m].mean()) if m.any() else 0.0
-    img.thumbnail((700, 220))
-    buf = io.BytesIO()
-    img.save(buf, "PNG")
-    return {"b64": base64.b64encode(buf.getvalue()).decode(), "plain": bool((not has_alpha) or lum > 200), "src": None}
-
-
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_logo() -> dict:
-    # 1) File logo nằm trong repo (logo.png / logo.jpg ...) - KHUYÊN DÙNG: link ảnh Facebook có chữ ký, hết hạn sau vài ngày
-    here = Path(__file__).parent
-    for name in ["logo.png", "logo.jpg", "logo.jpeg", "logo.webp"]:
-        fp = here / name
+    # Ưu tiên file logo nằm cạnh app (logo.png / logo.jpg ...): link Facebook/CDN có chữ ký và sẽ HẾT HẠN.
+    # Nếu không có file, thử tải từ LOGO_URL; cuối cùng để trình duyệt tự tải link.
+    import requests
+    from PIL import Image
+
+    def process(content: bytes) -> dict:
+        img = Image.open(io.BytesIO(content)).convert("RGBA")
+        a = np.asarray(img)
+        has_alpha = a[..., 3].min() < 250
+        if has_alpha:  # logo nền trong suốt: cắt sát phần có nội dung
+            bbox = img.getchannel("A").point(lambda v: 255 if v > 20 else 0).getbbox()
+            if bbox:
+                img = img.crop(bbox)
+                a = np.asarray(img)
+        m = a[..., 3] > 128
+        lum = float((0.299 * a[..., 0] + 0.587 * a[..., 1] + 0.114 * a[..., 2])[m].mean()) if m.any() else 0.0
+        img.thumbnail((900, 300))
+        buf = io.BytesIO()
+        img.save(buf, "PNG")
+        # plain = đặt thẳng lên nền xanh (ảnh nền đặc hoặc logo sáng); ngược lại cần ô trắng nhỏ
+        return {"b64": base64.b64encode(buf.getvalue()).decode(), "plain": bool((not has_alpha) or lum > 200), "src": None}
+
+    for name in ("logo.png", "logo.jpg", "logo.jpeg", "logo.webp"):
+        fp = Path(__file__).with_name(name)
         if fp.exists():
             try:
-                return _process_logo(fp.read_bytes())
+                return process(fp.read_bytes())
             except Exception:
                 pass
-    # 2) Tải từ link LOGO_URL
-    import requests
-    from urllib.parse import parse_qs, unquote, urlparse
-    cands = [LOGO_URL]
     try:
-        direct = parse_qs(urlparse(LOGO_URL).query).get("url", [None])[0]
-        if direct:
-            cands.append(unquote(direct))
+        r = requests.get(LOGO_URL, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
+        if r.status_code == 200 and r.headers.get("content-type", "").startswith("image"):
+            return process(r.content)
     except Exception:
         pass
-    for u in cands:
-        try:
-            r = requests.get(u, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
-            if r.status_code == 200 and r.headers.get("content-type", "").startswith("image"):
-                return _process_logo(r.content)
-        except Exception:
-            continue
     return {"b64": None, "plain": True, "src": LOGO_URL}
 
 
@@ -415,6 +400,132 @@ def to_excel(df: pd.DataFrame) -> bytes:
     return buf.getvalue()
 
 
+def hex_rgba(h, a):
+    h = h.lstrip("#")
+    return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{a})"
+
+
+def text_on(h):
+    # chữ trắng trên nền đậm, chữ tối trên nền sáng
+    h = h.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return "#FFFFFF" if (0.299 * r + 0.587 * g + 0.114 * b) < 150 else INK
+
+
+def blend(h, a):
+    # màu thực tế của vùng tô (alpha trên nền trắng) để chọn màu chữ dễ đọc
+    h = h.lstrip("#")
+    c = [int(h[k:k + 2], 16) * a + 255 * (1 - a) for k in (0, 2, 4)]
+    return "#%02X%02X%02X" % tuple(int(x) for x in c)
+
+
+def stacked_area(xl, series, people, pcol, height=320, alpha=0.6):
+    """Biểu đồ vùng chồng: mỗi vùng là 1 cán bộ, nhãn giá trị riêng đặt giữa vùng, số tổng ghi phía trên cùng."""
+    fig = go.Figure()
+    n = len(xl)
+    totals = [sum(series[p][i] for p in people) for i in range(n)]
+    ymax = max(max(totals), 1)
+    cum = [0] * n
+    for p in people:
+        v = series[p]
+        fig.add_trace(go.Scatter(
+            x=xl, y=v, name=p, mode="lines+markers", stackgroup="one",
+            line=dict(color=pcol[p], width=2.2), marker=dict(size=6, color=pcol[p]),
+            fillcolor=hex_rgba(pcol[p], alpha), customdata=v,
+            hovertemplate=f"{p}: %{{customdata:,}} yêu cầu<extra></extra>"))
+        mid = [cum[i] + v[i] / 2 for i in range(n)]
+        fig.add_trace(go.Scatter(
+            x=xl, y=mid, mode="text", showlegend=False, hoverinfo="skip", cliponaxis=False,
+            text=[vn(x) if x >= ymax * 0.045 else "" for x in v], textposition="middle center",
+            textfont=dict(size=11, color=text_on(blend(pcol[p], alpha)))))
+        cum = [cum[i] + v[i] for i in range(n)]
+    fig.add_trace(go.Scatter(
+        x=xl, y=totals, mode="text", text=[f"<b>{vn(t)}</b>" for t in totals], textposition="top center",
+        textfont=dict(size=12, color=INK), showlegend=False, hoverinfo="skip", cliponaxis=False))
+    fig.update_xaxes(type="category", tickangle=0)
+    fig.update_yaxes(range=[0, ymax * 1.2], rangemode="tozero")
+    fig.update_layout(hovermode="x unified")
+    return style_fig(fig, height, legend=True)
+
+
+def peak_labels(ys, k=3):
+    # chỉ ghi số ở k đỉnh cao nhất của mỗi đường để các vùng chồng nhau không bị rối chữ
+    n, cand = len(ys), []
+    for i, v in enumerate(ys):
+        left = ys[i - 1] if i > 0 else -1
+        right = ys[i + 1] if i < n - 1 else -1
+        if v > 0 and v >= left and v >= right:
+            cand.append((v, i))
+    keep = {i for _, i in sorted(cand, reverse=True)[:k]}
+    return [vn(v) if i in keep else "" for i, v in enumerate(ys)]
+
+
+def pick_peaks(vals, k=5, gap=2):
+    # chọn k điểm cao nhất, cách nhau ít nhất `gap` điểm để nhãn số không dính vào nhau
+    chosen = []
+    for i in sorted(range(len(vals)), key=lambda j: -vals[j]):
+        if vals[i] <= 0 or len(chosen) >= k:
+            break
+        if all(abs(i - j) >= gap for j in chosen):
+            chosen.append(i)
+    return set(chosen)
+
+
+def area_stacked(x, series, people, pcol, xtitle=None, ticktext=None, weekend_x=(), height=340, alpha=0.62, k=5):
+    """Vùng CỘNG DỒN: đỉnh = tổng cả phòng nhận trong ngày; mỗi cán bộ là một dải màu nằm trên dải trước đó.
+    Chỉ ghi số ở k ngày cao nhất (tổng + phần của từng người); các ngày còn lại xem khi rê chuột."""
+    fig = go.Figure()
+    n = len(x)
+    totals = [sum(series[p][i] for p in people) for i in range(n)]
+    ymax = max(max(totals), 1)
+    keep = pick_peaks(totals, k)
+    for xv in weekend_x:                       # nền xám nhạt cho cuối tuần
+        fig.add_vrect(x0=xv - 0.5, x1=xv + 0.5, fillcolor="#EEF3F2", opacity=0.9, layer="below", line_width=0)
+    cum = [0] * n
+    for p in people:                           # thứ tự xếp từ dưới lên = thứ tự trong chú thích
+        v = series[p]
+        fig.add_trace(go.Scatter(
+            x=x, y=v, name=p, mode="lines+markers", stackgroup="one", line=dict(color=pcol[p], width=1.4),
+            marker=dict(size=[6 if i in keep else 0 for i in range(n)], color=pcol[p], line=dict(color="#FFFFFF", width=1)),
+            fillcolor=hex_rgba(pcol[p], alpha), customdata=v,
+            hovertemplate=f"{p}: %{{customdata:,}} yêu cầu<extra></extra>"))
+        mid = [cum[i] + v[i] / 2 for i in range(n)]
+        fig.add_trace(go.Scatter(                  # số của từng cán bộ nằm giữa dải màu, chỉ ở các ngày cao nhất
+            x=x, y=mid, mode="text", showlegend=False, hoverinfo="skip", cliponaxis=False,
+            text=[vn(val) if (i in keep and val >= ymax * 0.07) else "" for i, val in enumerate(v)],
+            textposition="middle center", textfont=dict(size=11, color=text_on(blend(pcol[p], alpha)))))
+        cum = [cum[i] + v[i] for i in range(n)]
+    fig.add_trace(go.Scatter(                      # tổng cả phòng ghi trên đỉnh ở các ngày cao nhất
+        x=x, y=totals, mode="text", name="Tổng cả phòng", showlegend=False, cliponaxis=False,
+        text=[f"<b>{vn(t)}</b>" if i in keep else "" for i, t in enumerate(totals)], textposition="top center",
+        textfont=dict(size=13, color=INK), hovertemplate="%{y:,} yêu cầu<extra>Tổng cả phòng</extra>"))
+    fig.update_xaxes(tickmode="array", tickvals=list(x), ticktext=ticktext or [str(v) for v in x],
+                     range=[min(x) - 0.5, max(x) + 0.5], title=xtitle, tickangle=0, tickfont=dict(size=11))
+    fig.update_yaxes(range=[0, ymax * 1.2], rangemode="tozero")
+    fig.update_layout(hovermode="x unified")
+    return style_fig(fig, height, legend=True)
+
+
+def area_overlap(x, series, people, pcol, xtitle=None, ticktext=None, weekend_x=(), height=340, alpha=0.32):
+    """Biểu đồ vùng chồng lên nhau (như mẫu Power BI): mỗi cán bộ 1 đường + 1 vùng tô trong suốt từ trục đáy."""
+    fig = go.Figure()
+    for xv in weekend_x:                       # nền xám nhạt cho cuối tuần
+        fig.add_vrect(x0=xv - 0.5, x1=xv + 0.5, fillcolor="#E9F0EE", opacity=0.9, layer="below", line_width=0)
+    for p in sorted(people, key=lambda q: -sum(series[q])):          # vùng lớn vẽ trước, vùng nhỏ nằm đè lên
+        ys = series[p]
+        fig.add_trace(go.Scatter(
+            x=x, y=ys, name=p, mode="lines+markers+text", line=dict(color=pcol[p], width=2.2),
+            marker=dict(size=5, color=pcol[p]), fill="tozeroy", fillcolor=hex_rgba(pcol[p], alpha),
+            text=peak_labels(ys), textposition="top center", textfont=dict(size=11, color=pcol[p]),
+            cliponaxis=False, hovertemplate=f"{p} · %{{x}}: %{{y:,}} yêu cầu<extra></extra>"))
+    fig.update_xaxes(tickmode="array", tickvals=list(x), ticktext=ticktext or [str(v) for v in x],
+                     range=[min(x) - 0.5, max(x) + 0.5], title=xtitle, tickangle=0, tickfont=dict(size=11))
+    top = max((max(v) for v in series.values() if len(v)), default=1)
+    fig.update_yaxes(range=[0, max(top, 1) * 1.22], rangemode="tozero")
+    fig.update_layout(legend_traceorder="normal")
+    return style_fig(fig, height, legend=True)
+
+
 # ---------- thống kê ----------
 def stats(d: pd.DataFrame) -> dict:
     n = len(d)
@@ -436,7 +547,7 @@ def delta_pill(cur, prev, kind="neutral", mode="pct", unit="", partial=False) ->
     if prev is None:
         return ""
     if partial:
-        return "<span class='kd flat'>Quý chưa kết thúc</span>"
+        return "<span class='kd flat'>Tháng chưa kết thúc</span>"
     if cur is None or prev is None or pd.isna(cur) or pd.isna(prev):
         return "<span class='kd flat'>–</span>"
     diff = cur - prev
@@ -615,6 +726,7 @@ if "received" not in mp:
     st.stop()
 
 data = prepare(df_raw, mp)
+data["m"] = data["received"].dt.month.astype("Int64")
 if data.empty:
     st.error("Không có dòng dữ liệu hợp lệ.")
     st.stop()
@@ -626,13 +738,21 @@ last_date = data["received"].max()
 # ----------------------------------------------------------------------------
 years = sorted(data["year"].dropna().unique().tolist())
 latest_year = years[-1]
-q_latest = int(data.loc[data["year"] == latest_year, "q"].max())
+
+
+def default_months(year, avail):
+    # mặc định: tháng đã kết thúc gần nhất có dữ liệu (tháng đang diễn ra mới có vài ngày chưa đủ để báo cáo)
+    if not avail:
+        return []
+    ended = [m for m in avail if pd.Period(f"{year}-{m:02d}", freq="M").end_time.date() < TODAY]
+    return [ended[-1]] if ended else [avail[-1]]
+
 
 with st.sidebar:
     sel_year = st.selectbox("Năm", years, index=len(years) - 1)
-    quarters = sorted(data.loc[data["year"] == sel_year, "quarter"].dropna().unique().tolist())
-    default_q = [f"Q{q_latest}"] if (sel_year == latest_year and f"Q{q_latest}" in quarters) else quarters
-    sel_q = st.multiselect("Quý", quarters, default=default_q)
+    months_avail = sorted(int(x) for x in data.loc[data["year"] == sel_year, "m"].dropna().unique())
+    sel_m = st.multiselect("Tháng", months_avail, default=default_months(sel_year, months_avail),
+                           format_func=lambda x: f"Tháng {x:02d}")
     sel_unit = st.multiselect("Đơn vị yêu cầu", sorted(data["unit"].unique()))
     sel_status = st.multiselect("Trạng thái", sorted(data["status"].unique()))
     sel_owner = st.multiselect("Người thực hiện", sorted(data["owner"].unique()))
@@ -641,10 +761,10 @@ with st.sidebar:
     st.caption(f"Dữ liệu: {len(data):,} yêu cầu · tự cập nhật tối đa mỗi 10 phút")
 
 
-def apply(df, year, quarters_, use_q=True):
+def apply(df, year, months_, use_m=True):
     m = df["year"] == year
-    if use_q and quarters_:
-        m &= df["quarter"].isin(quarters_)
+    if use_m and months_:
+        m &= df["m"].isin(months_)
     if sel_unit:
         m &= df["unit"].isin(sel_unit)
     if sel_status:
@@ -658,27 +778,34 @@ def apply(df, year, quarters_, use_q=True):
     return df[m]
 
 
-f = apply(data, sel_year, sel_q)
-f_allq = apply(data, sel_year, sel_q, use_q=False)
+f = apply(data, sel_year, sel_m)
+f_year = apply(data, sel_year, sel_m, use_m=False)
 
-# kỳ trước (chỉ khi chọn đúng 1 quý)
-prev_df, prev_label, prev_key = None, "Kỳ trước", None
-if len(sel_q) == 1:
-    qn = int(sel_q[0][1:])
-    py, pq = (sel_year, qn - 1) if qn > 1 else (sel_year - 1, 4)
-    pdf = apply(data, py, [f"Q{pq}"])
+# kỳ trước = tháng liền trước (chỉ khi chọn đúng 1 tháng)
+prev_df, prev_label, prev_key = None, "Tháng trước", None
+if len(sel_m) == 1:
+    mn = sel_m[0]
+    py, pm = (sel_year, mn - 1) if mn > 1 else (sel_year - 1, 12)
+    pdf = apply(data, py, [pm])
     if len(pdf):
-        prev_df, prev_label, prev_key = pdf, f"Q{pq}/{py}", (py, [f"Q{pq}"])
+        prev_df, prev_label, prev_key = pdf, f"T{pm:02d}/{py}", (py, [pm])
 
-# quý chưa kết thúc?
-def q_end(y, q):
-    return pd.Period(f"{y}Q{q}", freq="Q").end_time.date()
+
+def m_end(y, m):
+    return pd.Period(f"{y}-{m:02d}", freq="M").end_time.date()
+
 
 today = TODAY
-in_progress = (any(q_end(sel_year, int(q[1:])) >= today for q in sel_q) if sel_q else sel_year == today.year)
-partial_cmp = in_progress and len(sel_q) == 1
+in_progress = (any(m_end(sel_year, mm) >= today for mm in sel_m) if sel_m else sel_year == today.year)
+partial_cmp = in_progress and len(sel_m) == 1
 
-period_label = (f"Quý {' + '.join(ROMAN.get(int(q[1:]), q) for q in sel_q)} - {sel_year}" if sel_q else f"Năm {sel_year}")
+if sel_m:
+    ms = sorted(sel_m)
+    period_label = (f"Tháng {ms[0]:02d}/{sel_year}" if len(ms) == 1
+                    else f"Tháng {', '.join(f'{x:02d}' for x in ms)}/{sel_year}")
+    period_slug = "-".join(f"{x:02d}" for x in ms)
+else:
+    period_label, period_slug = f"Năm {sel_year}", "ca_nam"
 logo = load_logo()
 if logo["b64"]:
     img_tag = f"<img src='data:image/png;base64,{logo['b64']}' alt='Anna'>"
@@ -688,7 +815,7 @@ else:
 logo_html = img_tag if logo["plain"] else f"<div class='logo-tile'>{img_tag}</div>"
 sub_txt = f"{period_label} · Dữ liệu đến {last_date:%d/%m/%Y}" + (" · kỳ báo cáo đang diễn ra" if in_progress else "")
 st.markdown(
-    f"<div class='hero'>{logo_html}<div><div class='eyebrow'>Anna · Bộ phận Pháp chế</div>"
+    f"<div class='hero'>{logo_html}<div><div class='eyebrow'>Báo cáo tháng · Anna · Bộ phận Pháp chế</div>"
     f"<div class='title'>BÁO CÁO CHẤT LƯỢNG CÔNG VIỆC PHÁP CHẾ - PHÒNG KIỂM SOÁT NỘI BỘ</div>"
     f"<div class='sub'>{sub_txt}</div></div>"
     f"<div class='pill'>{period_label} · {vn(len(f))} yêu cầu</div></div>", unsafe_allow_html=True)
@@ -703,13 +830,13 @@ PS = proc_stats(f)
 PSP = proc_stats(prev_df) if prev_df is not None else None
 
 
-def span_days(year, quarters_):
+def span_days(year, months):
     # các ngày lịch thuộc kỳ; kỳ chưa kết thúc chỉ tính đến ngày có dữ liệu cuối
-    qs = sorted(int(q[1:]) for q in quarters_) if quarters_ else [1, 2, 3, 4]
+    ms = sorted(months) if months else list(range(1, 13))
     days = set()
-    for q_ in qs:
-        per = pd.Period(f"{year}Q{q_}", freq="Q")
-        a, b = per.start_time.normalize(), min(per.end_time.normalize(), last_date.normalize())
+    for m_ in ms:
+        a = pd.Timestamp(year=year, month=m_, day=1)
+        b = min(pd.Timestamp(m_end(year, m_)), last_date.normalize())
         if b >= a:
             days |= set(pd.date_range(a, b))
     return pd.DatetimeIndex(sorted(days))
@@ -722,7 +849,7 @@ def throughput(d, days_idx):
     return dict(done=done_, work_days=nw, cal_days=len(days_idx), per_day=(done_ / nw if nw else np.nan))
 
 
-TP = throughput(f, span_days(sel_year, sel_q))
+TP = throughput(f, span_days(sel_year, sel_m))
 TPP = throughput(prev_df, span_days(*prev_key)) if prev_df is not None and prev_key else None
 
 # ============================================================================
@@ -758,7 +885,9 @@ for col, html_ in zip(st.columns(len(cards), gap="medium"), cards):
     col.markdown(html_, unsafe_allow_html=True)
 
 st.write("")
-b1, b2, b3 = st.columns([1.6, 1, 1.35], gap="medium")
+b1, c1 = st.columns([1.7, 1], gap="medium")        # hàng 1: hạng mục + trạng thái
+b2, b3 = st.columns([1, 1.5], gap="medium")        # hàng 2: theo tháng + theo ngày (rộng)
+c2, c3 = st.columns([1.15, 1.25], gap="medium")    # hàng 3: đơn vị yêu cầu + kết luận
 
 with b1:
     with card("cat"):
@@ -780,39 +909,60 @@ with b1:
 
 with b2:
     with card("quarter"):
-        ct("Yêu cầu tiếp nhận theo quý", "Quý đang xem được tô đậm")
-        tq = f_allq.groupby("quarter").size().reset_index(name="n").sort_values("quarter")
-        sel_set = set(sel_q)
-        fig = go.Figure(go.Bar(
-            x=tq["quarter"], y=tq["n"], text=[vn(v) for v in tq["n"]], textposition="outside", cliponaxis=False,
-            marker_color=[TEAL_DARK if (not sel_set or q in sel_set) else "#BFE3DE" for q in tq["quarter"]],
-            width=0.55, hovertemplate="%{x}: %{y:,} yêu cầu<extra></extra>"))
-        fig.update_yaxes(range=[0, max(tq["n"].max(), 1) * 1.18])
-        show(style_fig(fig, 300))
+        ct("Yêu cầu tiếp nhận theo tháng", "Các tháng trong năm · tháng đang xem được tô đậm")
+        tq = f_year.dropna(subset=["m"]).groupby("m").size()
+        if len(tq):
+            idx = list(range(int(tq.index.min()), int(tq.index.max()) + 1))
+            vals = [int(tq.get(m_, 0)) for m_ in idx]
+            sel_set = set(sel_m)
+            fig = go.Figure(go.Bar(
+                x=[f"T{m_:02d}" for m_ in idx], y=vals, text=[vn(v) for v in vals], textposition="outside",
+                textangle=0, cliponaxis=False, textfont=dict(size=12, color=INK),
+                marker_color=[TEAL_DARK if (not sel_set or m_ in sel_set) else "#BFE3DE" for m_ in idx],
+                hovertemplate="%{x}: %{y:,} yêu cầu<extra></extra>"))
+            fig.update_layout(bargap=0.28)
+            fig.update_xaxes(type="category", tickangle=0)
+            fig.update_yaxes(range=[0, max(max(vals), 1) * 1.15])
+            show(style_fig(fig, 350))
 
 with b3:
     with card("month"):
-        ct("Khối lượng công việc theo thời gian", "Số yêu cầu tiếp nhận mỗi tháng · tháng thuộc kỳ đang xem được tô đậm")
-        tm = f_allq.dropna(subset=["received"]).groupby("ym").size()
-        if len(tm):
-            idx = pd.period_range(tm.index.min(), tm.index.max(), freq="M").astype(str)
-            tm = tm.reindex(idx, fill_value=0)
-            labels = [f"T{p[5:7]}/{p[2:4]}" for p in idx]
-            in_sel = [(not sel_set) or (f"Q{(int(p[5:7]) - 1) // 3 + 1}" in sel_set) for p in idx]
-            vals = tm.values
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=labels, y=vals, mode="lines", line=dict(color="#8CCBE8", width=2.5),
-                                     fill="tozeroy", fillcolor="rgba(45,156,219,.10)", hoverinfo="skip"))
-            fig.add_trace(go.Scatter(
-                x=labels, y=vals, mode="markers+text", text=[vn(v) for v in vals], textposition="top center",
-                cliponaxis=False, textfont=dict(size=11, color=[ORANGE if s else "#B7C3C1" for s in in_sel]),
-                marker=dict(size=[10 if s else 6 for s in in_sel], color=[BLUE if s else "#B8D6E6" for s in in_sel]),
-                hovertemplate="%{x}: %{y:,} yêu cầu<extra></extra>"))
-            fig.update_xaxes(type="category")
-            fig.update_yaxes(range=[0, max(vals.max(), 1) * 1.22])
-            show(style_fig(fig, 300))
-
-c1, c2, c3 = st.columns([1, 1.25, 1.25], gap="medium")
+        fd_ = f.dropna(subset=["received"])
+        if len(fd_):
+            if sel_m:  # phạm vi: từ đầu tháng đầu tiên đến cuối tháng cuối (hoặc đến ngày có dữ liệu cuối)
+                d0 = pd.Timestamp(year=sel_year, month=min(sel_m), day=1)
+                d1 = min(pd.Timestamp(m_end(sel_year, max(sel_m))), last_date.normalize())
+            else:
+                d0, d1 = fd_["received"].min().normalize(), fd_["received"].max().normalize()
+            d1 = max(d1, d0)
+            n_days = (d1 - d0).days + 1
+            weekly = n_days > 45
+            if weekly:
+                ct("Khối lượng công việc theo tuần", "Số yêu cầu tiếp nhận mỗi tuần (tuần bắt đầu từ thứ Hai)")
+                wk = fd_["received"].dt.to_period("W").dt.start_time
+                sr = fd_.groupby(wk).size()
+                sr = sr.reindex(pd.date_range(sr.index.min(), sr.index.max(), freq="7D"), fill_value=0)
+                colors = [TEAL_DARK] * len(sr)
+                dtick, pad = 7, 4
+            else:
+                ct("Khối lượng công việc theo ngày", "Số yêu cầu tiếp nhận mỗi ngày · cột nhạt = cuối tuần")
+                sr = fd_.groupby(fd_["received"].dt.normalize()).size()
+                sr = sr.reindex(pd.date_range(d0, d1), fill_value=0)
+                colors = ["#BFE3DE" if d.dayofweek >= 5 else TEAL_DARK for d in sr.index]
+                dtick, pad = (1 if n_days <= 10 else 2 if n_days <= 16 else 3 if n_days <= 31 else 4), 1
+            pk_ = pick_peaks([int(v) for v in sr.values], 4 if weekly else 5)
+            fig = go.Figure(go.Bar(
+                x=sr.index, y=sr.values, marker_color=colors,
+                text=[vn(v) if i in pk_ else "" for i, v in enumerate(sr.values)], textposition="outside",
+                textangle=0, cliponaxis=False,
+                textfont=dict(size=11, color=INK), hovertemplate="%{x|%d/%m/%Y}: %{y:,} yêu cầu<extra></extra>"))
+            fig.update_layout(bargap=0.18)
+            fig.update_xaxes(type="date", tickformat="%d/%m", tickmode="linear", dtick=dtick * 86400000.0,
+                             tick0=sr.index[0], tickangle=0,
+                             range=[sr.index[0] - pd.Timedelta(days=0.6 if not weekly else 3),
+                                    sr.index[-1] + pd.Timedelta(days=0.6 if not weekly else 3)])
+            fig.update_yaxes(range=[0, max(sr.values.max(), 1) * 1.15])
+            show(style_fig(fig, 350))
 
 with c1:
     with card("status"):
@@ -852,11 +1002,11 @@ with c2:
 with c3:
     with card("concl"):
         box = st.empty()
-        pk = f"{sel_year}|{'+'.join(sel_q) if sel_q else 'ALL'}"
+        pk = f"{sel_year}|{period_slug}"
         wk = f"note_{pk}"
         with st.expander("✍️ Nhập nhận xét bổ sung", expanded=False):
             note = st.text_area("Mỗi dòng là 1 ý", value=load_notes().get(pk, ""), key=wk, height=120,
-                                placeholder="VD: Tháng 9 tăng đột biến do chương trình khuyến mại...",
+                                placeholder="VD: Số yêu cầu tăng do đợt khuyến mại cuối tháng...",
                                 on_change=save_note, args=(pk, wk))
             st.caption("Nhận xét được lưu theo từng kỳ báo cáo (file nhan_xet_bo_sung.json cạnh app).")
 
@@ -866,7 +1016,7 @@ with c3:
         b_ = [f"<b>Khối lượng công việc:</b> {period_label}, Phòng Pháp chế tiếp nhận <b>{vn(S['n'])}</b> yêu cầu thuộc <b>{S['cat']}</b> hạng mục."]
         if SP is not None and SP["n"]:
             if partial_cmp:
-                b_[0] += f" Dữ liệu đến {last_date:%d/%m/%Y} (quý chưa kết thúc) nên chưa so sánh với {prev_label} ({vn(SP['n'])} yêu cầu)."
+                b_[0] += f" Dữ liệu đến {last_date:%d/%m/%Y} (tháng chưa kết thúc) nên chưa so sánh với {prev_label} ({vn(SP['n'])} yêu cầu)."
             else:
                 ch = (S["n"] - SP["n"]) / SP["n"]
                 b_[0] += f" So với {prev_label} ({vn(SP['n'])} yêu cầu): {'tăng' if ch >= 0 else 'giảm'} {vn(abs(ch) * 100, 1)}%."
@@ -908,8 +1058,8 @@ with d2:
         ct("Yêu cầu theo thứ trong tuần", "Ngày nhận yêu cầu")
         wd = f["received"].dt.dayofweek.value_counts().reindex(range(7), fill_value=0)
         fig = go.Figure(go.Bar(x=["T2", "T3", "T4", "T5", "T6", "T7", "CN"], y=wd.values, marker_color=TEAL,
-                               text=[vn(v) if v else "" for v in wd.values], textposition="outside", cliponaxis=False,
-                               width=0.6))
+                               text=[vn(v) if v else "" for v in wd.values], textposition="outside", textangle=0,
+                               cliponaxis=False, width=0.6))
         fig.update_yaxes(range=[0, max(wd.max(), 1) * 1.18])
         show(style_fig(fig, 330))
 
@@ -917,7 +1067,7 @@ st.markdown(
     "<div class='fn'><b>Trong đó:</b><br>"
     "- <b>Đã hoàn thành</b>: số yêu cầu có trạng thái “Hoàn thành”. <b>Đang thực hiện / Tạm dừng</b>: theo cột Trạng thái.<br>"
     "- <b>Tỷ lệ hoàn thành</b> = Đã hoàn thành / Số lượng yêu cầu, làm tròn xuống 1 số lẻ (chỉ hiển thị 100% khi toàn bộ đã hoàn thành).<br>"
-    "- Kỳ so sánh chỉ hiển thị khi chọn đúng 1 quý; các bộ lọc khác (đơn vị, trạng thái, người thực hiện, hạng mục) được áp dụng cho cả 2 kỳ.</div>",
+    "- Kỳ so sánh (tháng trước) chỉ hiển thị khi chọn đúng 1 tháng; các bộ lọc khác (đơn vị, trạng thái, người thực hiện, hạng mục) được áp dụng cho cả 2 kỳ.</div>",
     unsafe_allow_html=True)
 
 # ============================================================================
@@ -957,17 +1107,29 @@ with e1:
         st.markdown(pivot_html(f, people, cat_order, "Hạng mục"), unsafe_allow_html=True)
 with e2:
     with card("pq"):
-        ct("Yêu cầu tiếp nhận theo quý", "Theo cán bộ phụ trách")
-        tqp = f_allq.groupby(["quarter", "owner"]).size().reset_index(name="n")
-        fig = go.Figure()
-        for p in people:
-            s = tqp[tqp["owner"] == p]
-            fig.add_trace(go.Bar(x=s["quarter"], y=s["n"], name=p, marker_color=pcol[p],
-                                 text=[vn(v) for v in s["n"]], textposition="inside", width=0.55,
-                                 hovertemplate=f"{p} · %{{x}}: %{{y:,}}<extra></extra>"))
-        fig.update_layout(barmode="stack")
-        fig.update_xaxes(categoryorder="category ascending")
-        show(style_fig(fig, 300, legend=True))
+        ct("Yêu cầu tiếp nhận theo tháng", "Theo cán bộ phụ trách · số trên đỉnh là tổng của tháng")
+        tqp = f_year.dropna(subset=["m"]).groupby(["m", "owner"]).size().reset_index(name="n")
+        if len(tqp):
+            midx = list(range(int(tqp["m"].min()), int(tqp["m"].max()) + 1))
+            xl_ = [f"T{m_:02d}" for m_ in midx]
+            tot_ = tqp.groupby("m")["n"].sum()
+            totals = [int(tot_.get(m_, 0)) for m_ in midx]
+            fig = go.Figure()
+            for p in people:
+                sp_ = tqp[tqp["owner"] == p].set_index("m")["n"]
+                v_ = [int(sp_.get(m_, 0)) for m_ in midx]
+                fig.add_trace(go.Bar(
+                    x=xl_, y=v_, name=p, marker_color=pcol[p],
+                    text=[vn(v) if v >= max(totals) * 0.07 else "" for v in v_], textposition="inside",
+                    insidetextanchor="middle", textangle=0, textfont=dict(size=11, color=text_on(pcol[p])),
+                    hovertemplate=f"{p} · %{{x}}: %{{y:,}}<extra></extra>"))
+            fig.add_trace(go.Scatter(x=xl_, y=totals, mode="text", text=[f"<b>{vn(t)}</b>" for t in totals],
+                                     textposition="top center", textfont=dict(size=12, color=INK),
+                                     showlegend=False, hoverinfo="skip", cliponaxis=False))
+            fig.update_layout(barmode="stack", bargap=0.28, legend_traceorder="normal")
+            fig.update_xaxes(type="category", tickangle=0)
+            fig.update_yaxes(range=[0, max(max(totals), 1) * 1.15])
+            show(style_fig(fig, 320, legend=True))
 
 g1, g2 = st.columns([1, 1.4], gap="medium")
 with g1:
@@ -989,25 +1151,28 @@ with g1:
                                  hovertemplate=f"{s}: %{{x:.2f}}%<extra></extra>"))
         fig.update_layout(barmode="stack")
         fig.update_xaxes(range=[0, 100], tickvals=[0, 25, 50, 75, 100], ticktext=["0%", "25%", "50%", "75%", "100%"])
-        show(style_fig(fig, 300, legend=True).update_layout(margin=dict(l=6, r=26, t=34, b=6)))
+        show(style_fig(fig, 340, legend=True).update_layout(margin=dict(l=6, r=26, t=34, b=6)))
 with g2:
     with card("pmonth"):
-        ct("Khối lượng công việc theo thời gian", "Số yêu cầu tiếp nhận mỗi tháng theo cán bộ")
-        tmp = f_allq.dropna(subset=["received"]).groupby(["ym", "owner"]).size().reset_index(name="n")
-        if len(tmp):
-            idx = pd.period_range(tmp["ym"].min(), tmp["ym"].max(), freq="M").astype(str)
-            labels = {p: f"T{p[5:7]}/{p[2:4]}" for p in idx}
-            fig = go.Figure()
-            for p in people:
-                s = tmp[tmp["owner"] == p].set_index("ym")["n"].reindex(idx, fill_value=0)
-                fig.add_trace(go.Scatter(x=[labels[i] for i in idx], y=s.values, name=p, mode="lines+markers+text",
-                                         line=dict(color=pcol[p], width=2.5), marker=dict(size=7),
-                                         text=[vn(v) for v in s.values], textposition="top center",
-                                         textfont=dict(size=10, color=pcol[p]), cliponaxis=False,
-                                         hovertemplate=f"{p} · %{{x}}: %{{y:,}}<extra></extra>"))
-            fig.update_xaxes(type="category")
-            fig.update_yaxes(range=[0, tmp.groupby(["ym", "owner"])["n"].sum().max() * 1.2])
-            show(style_fig(fig, 300, legend=True))
+        fw = f.dropna(subset=["received"])
+        if len(sel_m) == 1 and len(fw):
+            mn = sel_m[0]
+            dim = pd.Period(f"{sel_year}-{mn:02d}", freq="M").days_in_month
+            end_day = min(dim, last_date.day) if (last_date.year, last_date.month) == (sel_year, mn) else dim
+            days = list(range(1, end_day + 1))
+            ct("Khối lượng công việc theo ngày trong tháng",
+               "Đỉnh = tổng cả phòng nhận trong ngày · mỗi màu là phần của từng cán bộ (cộng dồn) · nền xám = cuối tuần")
+            cnt = fw.groupby([fw["received"].dt.day, "owner"]).size()
+            series = {p: [int(cnt.get((d_, p), 0)) for d_ in days] for p in people}
+            wkend = [d_ for d_ in days if pd.Timestamp(year=sel_year, month=mn, day=d_).dayofweek >= 5]
+            show(area_stacked(days, series, people, pcol, xtitle="Ngày tiếp nhận yêu cầu", weekend_x=wkend, height=340))
+        elif len(fw):
+            ct("Khối lượng công việc theo thời gian", "Đỉnh = tổng cả phòng nhận trong tháng · mỗi màu là phần của từng cán bộ (cộng dồn)")
+            cnt = fw.groupby(["ym", "owner"]).size()
+            idx = list(pd.period_range(fw["ym"].min(), fw["ym"].max(), freq="M").astype(str))
+            series = {p: [int(cnt.get((i_, p), 0)) for i_ in idx] for p in people}
+            show(area_stacked(list(range(len(idx))), series, people, pcol, xtitle="Tháng tiếp nhận yêu cầu",
+                              ticktext=[f"T{i_[5:7]}/{i_[2:4]}" for i_ in idx], height=340))
 
 h1, h2 = st.columns([1.6, 1], gap="medium")
 with h1:
@@ -1103,7 +1268,7 @@ detail = (fd.sort_values(["received", "detail"])[
 t1, t2 = st.columns([4, 1])
 t1.caption(f"Hiển thị {vn(len(detail))} yêu cầu.")
 t2.download_button("⬇️ Tải file Excel", data=to_excel(detail),
-                   file_name=f"chi_tiet_cong_viec_phap_che_{sel_year}_{TODAY:%Y%m%d}.xlsx",
+                   file_name=f"chi_tiet_cong_viec_phap_che_thang_{sel_year}_{period_slug}_{TODAY:%Y%m%d}.xlsx",
                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                    width="stretch", type="primary")
 
