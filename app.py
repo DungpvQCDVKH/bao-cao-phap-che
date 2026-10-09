@@ -26,7 +26,7 @@ import streamlit as st
 # ----------------------------------------------------------------------------
 # CẤU HÌNH
 # ----------------------------------------------------------------------------
-DEFAULT_SHEET_ID = ""  # đặt SHEET_ID trong Secrets, không ghi cứng trong code
+DEFAULT_SHEET_ID = "131BlpOXvjyDMjxaQRkEgCDuQkWF3DaWN"
 
 
 def source_urls() -> list:
