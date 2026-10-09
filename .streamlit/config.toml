@@ -7,3 +7,9 @@ textColor = "#1F3A3D"
 
 [browser]
 gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+
+[server]
+enableXsrfProtection = true
