@@ -36,8 +36,6 @@ def source_urls() -> list:
         sid = st.secrets.get("SHEET_ID", DEFAULT_SHEET_ID) or DEFAULT_SHEET_ID
     except Exception:
         pass
-    if not sid:
-        return []
     return [
         f"https://docs.google.com/spreadsheets/d/{sid}/export?format=xlsx",   # Google Sheet gốc
         f"https://drive.google.com/uc?export=download&id={sid}",             # file .xlsx lưu trên Drive
@@ -98,8 +96,6 @@ st.set_page_config(page_title="Báo cáo chất lượng công việc Pháp ch�
 
 CSS = """
 <style>
-#MainMenu, footer, [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"]{visibility:hidden;display:none;}
-
 @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
 .stApp {font-family:'Be Vietnam Pro','Segoe UI',Roboto,Arial,sans-serif; background:__BG__;}
 header[data-testid="stHeader"] {background:transparent;}
@@ -582,8 +578,6 @@ with st.sidebar:
         st.rerun()
 
 if content is None:
-    if not source_urls():
-        st.error("Thiếu **SHEET_ID** trong Secrets của app này: vào Manage app > Settings > Secrets rồi thêm dòng `SHEET_ID = \"...\"`.")
     st.warning("Chưa tự tải được dữ liệu từ Google Drive (file cần để chế độ *Anyone with the link – Viewer*). "
                "Bạn có thể tải file về (File ▸ Download ▸ .xlsx) rồi upload vào đây — dữ liệu gốc không bị thay đổi.")
     uploaded = st.file_uploader("Upload file nguồn (.xlsx)", type=["xlsx"])
@@ -634,16 +628,10 @@ years = sorted(data["year"].dropna().unique().tolist())
 latest_year = years[-1]
 q_latest = int(data.loc[data["year"] == latest_year, "q"].max())
 
-# Quý mặc định: quý gần nhất đã kết thúc đủ 3 tháng (có dữ liệu); nếu chưa có thì lấy quý mới nhất
-_yq = data[["year", "q"]].dropna().drop_duplicates()
-_ended = [(int(y), int(q)) for y, q in zip(_yq["year"], _yq["q"])
-          if pd.Timestamp(TODAY) > pd.Timestamp(int(y), 3 * int(q), 1) + pd.offsets.MonthEnd(0)]
-def_year, def_q_num = max(_ended) if _ended else (int(latest_year), q_latest)
-
 with st.sidebar:
-    sel_year = st.selectbox("Năm", years, index=years.index(def_year) if def_year in years else len(years) - 1)
+    sel_year = st.selectbox("Năm", years, index=len(years) - 1)
     quarters = sorted(data.loc[data["year"] == sel_year, "quarter"].dropna().unique().tolist())
-    default_q = [f"Q{def_q_num}"] if (sel_year == def_year and f"Q{def_q_num}" in quarters) else quarters
+    default_q = [f"Q{q_latest}"] if (sel_year == latest_year and f"Q{q_latest}" in quarters) else quarters
     sel_q = st.multiselect("Quý", quarters, default=default_q)
     sel_unit = st.multiselect("Đơn vị yêu cầu", sorted(data["unit"].unique()))
     sel_status = st.multiselect("Trạng thái", sorted(data["status"].unique()))
@@ -1158,4 +1146,4 @@ with st.expander("🔍 Kiểm tra chất lượng dữ liệu nguồn (theo bộ
     else:
         st.success("Không phát hiện bất thường trong dữ liệu đang lọc.")
 
-st.caption("Báo cáo tự cập nhật theo dữ liệu nguồn.")
+st.caption("Nguồn: Google Drive (chỉ đọc) · Báo cáo tự cập nhật khi dữ liệu nguồn thay đổi.")
