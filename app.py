@@ -30,18 +30,21 @@ DEFAULT_SHEET_ID = "131BlpOXvjyDMjxaQRkEgCDuQkWF3DaWN"
 
 
 def source_urls() -> list:
-    """ID file nguồn: ưu tiên lấy từ Streamlit secrets (SHEET_ID) để không phải ghi cứng trong code trên GitHub."""
-    sid = DEFAULT_SHEET_ID
+    """Thử lần lượt ID trong Secrets (nếu có) rồi ID mặc định; mỗi ID thử link export Sheet và link tải Drive."""
+    ids = []
     try:
-        sid = st.secrets.get("SHEET_ID", DEFAULT_SHEET_ID) or DEFAULT_SHEET_ID
+        sec = str(st.secrets.get("SHEET_ID", "") or "").strip()
+        if sec:
+            ids.append(sec)
     except Exception:
         pass
-    if not sid:
-        return []
-    return [
-        f"https://docs.google.com/spreadsheets/d/{sid}/export?format=xlsx",   # Google Sheet gốc
-        f"https://drive.google.com/uc?export=download&id={sid}",             # file .xlsx lưu trên Drive
-    ]
+    if DEFAULT_SHEET_ID and DEFAULT_SHEET_ID not in ids:
+        ids.append(DEFAULT_SHEET_ID)
+    urls = []
+    for sid in ids:
+        urls.append(f"https://docs.google.com/spreadsheets/d/{sid}/export?format=xlsx")   # Google Sheet gốc
+        urls.append(f"https://drive.google.com/uc?export=download&id={sid}")             # file .xlsx lưu trên Drive
+    return urls
 
 
 try:  # giờ Việt Nam (server Streamlit Cloud chạy giờ UTC)
@@ -292,7 +295,7 @@ def fetch_source():
                 return r.content
         except Exception:
             continue
-    return None
+    raise RuntimeError("Không tải được dữ liệu nguồn")
 
 
 def _process_logo(raw: bytes) -> dict:
@@ -573,7 +576,10 @@ def save_note(period_key: str, widget_key: str):
 # ----------------------------------------------------------------------------
 # NẠP DỮ LIỆU
 # ----------------------------------------------------------------------------
-content = fetch_source()
+try:
+    content = fetch_source()
+except Exception:
+    content = None
 with st.sidebar:
     st.markdown("### 🔎 Bộ lọc")
     if st.button("🔄 Làm mới dữ liệu", width="stretch"):
@@ -582,8 +588,6 @@ with st.sidebar:
         st.rerun()
 
 if content is None:
-    if not source_urls():
-        st.error("Thiếu **SHEET_ID** trong Secrets của app này: vào Manage app > Settings > Secrets rồi thêm dòng `SHEET_ID = \"...\"`.")
     st.warning("Chưa tự tải được dữ liệu từ Google Drive (file cần để chế độ *Anyone with the link – Viewer*). "
                "Bạn có thể tải file về (File ▸ Download ▸ .xlsx) rồi upload vào đây — dữ liệu gốc không bị thay đổi.")
     uploaded = st.file_uploader("Upload file nguồn (.xlsx)", type=["xlsx"])
