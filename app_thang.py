@@ -30,16 +30,21 @@ DEFAULT_SHEET_ID = "131BlpOXvjyDMjxaQRkEgCDuQkWF3DaWN"
 
 
 def source_urls() -> list:
-    """ID file nguồn: ưu tiên lấy từ Streamlit secrets (SHEET_ID) để không phải ghi cứng trong code trên GitHub."""
-    sid = DEFAULT_SHEET_ID
+    """Thử lần lượt ID trong Secrets (nếu có) rồi ID mặc định; mỗi ID thử link export Sheet và link tải Drive."""
+    ids = []
     try:
-        sid = st.secrets.get("SHEET_ID", DEFAULT_SHEET_ID) or DEFAULT_SHEET_ID
+        sec = str(st.secrets.get("SHEET_ID", "") or "").strip()
+        if sec:
+            ids.append(sec)
     except Exception:
         pass
-    return [
-        f"https://docs.google.com/spreadsheets/d/{sid}/export?format=xlsx",   # Google Sheet gốc
-        f"https://drive.google.com/uc?export=download&id={sid}",             # file .xlsx lưu trên Drive
-    ]
+    if DEFAULT_SHEET_ID and DEFAULT_SHEET_ID not in ids:
+        ids.append(DEFAULT_SHEET_ID)
+    urls = []
+    for sid in ids:
+        urls.append(f"https://docs.google.com/spreadsheets/d/{sid}/export?format=xlsx")   # Google Sheet gốc
+        urls.append(f"https://drive.google.com/uc?export=download&id={sid}")             # file .xlsx lưu trên Drive
+    return urls
 
 
 try:  # giờ Việt Nam (server Streamlit Cloud chạy giờ UTC)
@@ -91,6 +96,9 @@ st.set_page_config(page_title="Báo cáo tháng - Công việc Pháp chế", pag
 
 CSS = """
 <style>
+#MainMenu, footer, [data-testid="stMainMenu"], [data-testid="stAppDeployButton"], [data-testid="stToolbarActions"], [data-testid="stDecoration"], [data-testid="stStatusWidget"]{visibility:hidden;display:none;}
+[data-testid="stSidebarCollapsedControl"], [data-testid="stExpandSidebarButton"], [data-testid="stSidebarCollapseButton"]{visibility:visible !important;display:flex !important;}
+
 @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
 .stApp {font-family:'Be Vietnam Pro','Segoe UI',Roboto,Arial,sans-serif; background:__BG__;}
 header[data-testid="stHeader"] {background:transparent;}
@@ -283,7 +291,7 @@ def fetch_source():
                 return r.content
         except Exception:
             continue
-    return None
+    raise RuntimeError("Không tải được dữ liệu nguồn")
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -680,7 +688,10 @@ def save_note(period_key: str, widget_key: str):
 # ----------------------------------------------------------------------------
 # NẠP DỮ LIỆU
 # ----------------------------------------------------------------------------
-content = fetch_source()
+try:
+    content = fetch_source()
+except Exception:
+    content = None
 with st.sidebar:
     st.markdown("### 🔎 Bộ lọc")
     if st.button("🔄 Làm mới dữ liệu", width="stretch"):
@@ -1311,4 +1322,4 @@ with st.expander("🔍 Kiểm tra chất lượng dữ liệu nguồn (theo bộ
     else:
         st.success("Không phát hiện bất thường trong dữ liệu đang lọc.")
 
-st.caption("Nguồn: Google Drive (chỉ đọc) · Báo cáo tự cập nhật khi dữ liệu nguồn thay đổi.")
+st.caption("Báo cáo tự cập nhật theo dữ liệu nguồn.")

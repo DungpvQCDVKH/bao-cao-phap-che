@@ -9,7 +9,7 @@ textColor = "#1F3A3D"
 gatherUsageStats = false
 
 [client]
-toolbarMode = "minimal"
+toolbarMode = "viewer"
 
 [server]
 enableXsrfProtection = true

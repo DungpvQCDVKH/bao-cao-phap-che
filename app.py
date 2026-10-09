@@ -101,7 +101,8 @@ st.set_page_config(page_title="Báo cáo chất lượng công việc Pháp ch�
 
 CSS = """
 <style>
-#MainMenu, footer, [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"]{visibility:hidden;display:none;}
+#MainMenu, footer, [data-testid="stMainMenu"], [data-testid="stAppDeployButton"], [data-testid="stToolbarActions"], [data-testid="stDecoration"], [data-testid="stStatusWidget"]{visibility:hidden;display:none;}
+[data-testid="stSidebarCollapsedControl"], [data-testid="stExpandSidebarButton"], [data-testid="stSidebarCollapseButton"]{visibility:visible !important;display:flex !important;}
 
 @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
 .stApp {font-family:'Be Vietnam Pro','Segoe UI',Roboto,Arial,sans-serif; background:__BG__;}
