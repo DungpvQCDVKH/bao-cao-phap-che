@@ -36,6 +36,8 @@ def source_urls() -> list:
         sid = st.secrets.get("SHEET_ID", DEFAULT_SHEET_ID) or DEFAULT_SHEET_ID
     except Exception:
         pass
+    if not sid:
+        return []
     return [
         f"https://docs.google.com/spreadsheets/d/{sid}/export?format=xlsx",   # Google Sheet gốc
         f"https://drive.google.com/uc?export=download&id={sid}",             # file .xlsx lưu trên Drive
@@ -580,6 +582,8 @@ with st.sidebar:
         st.rerun()
 
 if content is None:
+    if not source_urls():
+        st.error("Thiếu **SHEET_ID** trong Secrets của app này: vào Manage app > Settings > Secrets rồi thêm dòng `SHEET_ID = \"...\"`.")
     st.warning("Chưa tự tải được dữ liệu từ Google Drive (file cần để chế độ *Anyone with the link – Viewer*). "
                "Bạn có thể tải file về (File ▸ Download ▸ .xlsx) rồi upload vào đây — dữ liệu gốc không bị thay đổi.")
     uploaded = st.file_uploader("Upload file nguồn (.xlsx)", type=["xlsx"])
